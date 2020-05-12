@@ -1,0 +1,8 @@
+patient_outbox:
+  user: patient
+
+doctor_outbox:
+  user: doctor
+
+admin_outbox:
+  user: admin

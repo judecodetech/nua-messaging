@@ -1,0 +1,36 @@
+<div class="my-3 p-3 bg-white rounded shadow-sm">
+
+  <% flash.each do |type, msg| %>
+    <div class="alert alert-<%= type %>">
+      <%= msg %>
+    </div>
+  <% end %>
+
+  <h6 class="border-bottom border-gray pb-2 mb-0">Inbox</h6>
+  <% User.current.inbox.messages.each do |message| %>
+    <%= link_to message do %>
+        <%= render partial: 'message', locals: {message: message} %>
+    <% end %>
+  <% end %>
+
+  <small class="d-block mt-3 text-right">
+    <%= link_to 'All Updates', root_url  %>
+  </small>
+</div>
+
+
+<div class="my-3 p-3 bg-white rounded shadow-sm">
+
+  <h6 class="border-bottom border-gray pb-2 mb-0">Outbox</h6>
+  <% User.current.outbox.messages.order(id: :desc).each do |message| %>
+    <%= render partial: 'message', locals: {message: message} %>
+  <% end %>
+
+  <% if User.current.outbox.messages.count == 0 %>
+      <p class="media-body py-3 mb-0 small lh-125 border-bottom border-gray">
+        No outbox message
+      </p>
+  <% end %>
+
+</div>
+

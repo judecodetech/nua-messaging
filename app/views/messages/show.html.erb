@@ -1,0 +1,20 @@
+<div class="card my-3 ">
+  <% flash.each do |type, msg| %>
+    <div class="alert alert-warning">
+      <%= msg %>
+    </div>
+  <% end %>
+  
+  <h5 class="card-header">
+    <% if @message.outbox.user.is_doctor? %>Dr.<% end %>
+    <%= @message.outbox.user.full_name %>
+  </h5>
+  
+  <div class="card-body">
+    <p class="card-text"><%= @message.body %></p>
+    <%= link_to "Reply",
+              new_message_path(associated_message_id: @message.id),
+              class: "btn btn-primary" %>
+    <%= link_to "I've lost my prescription", resend_script_path(@message), class: "btn btn-primary" %>
+  </div>
+</div>
