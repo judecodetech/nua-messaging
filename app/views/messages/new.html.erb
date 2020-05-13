@@ -4,15 +4,8 @@
   </h5>
 
   <div class="card-body">
-    <% flash.each do |type, msg| %>
-      <div class="alert alert-warning">
-        <%= msg %>
-      </div>
-    <% end %>
-
     <%= form_for @message do |f| %>
-
-      <%= f.hidden_field :associated_message_id, value: @associated_message_id %>
+      <%= hidden_field_tag :associated_message_id, params[:id] %>
 
       <div class="form-group py-3">
         <%= f.text_area :body, class: "form-control", rows: 3 %>
@@ -22,6 +15,7 @@
       <div class="form-group mb-0 text-right">
         <%= f.submit 'Send Message', class: 'btn btn-primary' %>
       </div>
+
     <% end %>
   </div>
 

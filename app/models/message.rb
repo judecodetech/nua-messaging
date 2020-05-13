@@ -1,31 +1,37 @@
 class Message < ApplicationRecord
-  after_create :increment_inbox_count!
+
+  after_create :increment_inbox_unread_messages_counter!
 
   belongs_to :inbox
   belongs_to :outbox
 
-  def increment_inbox_count!
-    # Increment the inbox_count column for the record with an id of `self.inbox.id`
-    Inbox.increment_counter(:inbox_count, self.inbox.id)
+  def receiver_inbox
+    is_old_message? ? Inbox.default_admin_inbox : sender.inbox
   end
 
-  def decrement_inbox_count!
-    Inbox.decrement_counter(:inbox_count, self.inbox.id)
+  def increment_inbox_unread_messages_counter!
+    Inbox.increment_counter(:inbox_count, inbox.id)
   end
 
-  def read_message!
-    self.read = true
-    self.save!
+  def decrement_inbox_unread_messages_counter!
+    Inbox.decrement_counter(:inbox_count, inbox.id)
   end
 
-  def self.created_in_past_week(id)
-  	message = Message.find(id)
+  def mark_as_read!
+    unless read
+      update(read: true)
+      decrement_inbox_unread_messages_counter!
+    end
+  end
 
-  	start_date = (Date.today - 7.days)
+  def is_old_message?
+    created_at.in_time_zone < ::DateTimeHelper.one_week_ago
+  end
 
-    # Now start_date is 1 week ago, and end_date is 1 week ago.
-    # Test if created_at falls within this range
-    Range.new(start_date.to_date, Date.today) === message.created_at.to_date
-  end 
+  private
+
+  def sender
+    outbox.user
+  end
 
 end
