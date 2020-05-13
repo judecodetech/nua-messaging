@@ -2,83 +2,97 @@ require 'test_helper'
 
 class MessagesControllerTest < ActionController::TestCase
 	def setup
-		# Updating these attributes here because boolean values set in the
-		# YAML fixture files return nil when used as a scope through the ORM.
-		users(:patient).update_attributes(is_patient: true)
-		users(:doctor).update_attributes(is_patient: false, is_doctor: true)
-		users(:admin).update_attributes(is_patient: false, is_admin:true)
+		@patient = create(:user, :patient)
+		@doctor = create(:user, :doctor)
+		@admin = create(:user, :admin)
 
-		@message = Message.create(body: 'Thanks for your order. I will in touch shortly after reviewing your treatment application.',
-            outbox: User.default_doctor.outbox,
-            inbox: User.current.inbox)
+		@message_params = FactoryBot.attributes_for(:message)
 
-		@message_more_than_a_week = Message.create(body: 'Thanks for your order.',
-        	outbox: User.default_doctor.outbox,
-          	inbox: User.current.inbox,
-          	created_at: DateTime.current.in_time_zone.weeks_ago(2))
+		@doctor_message =  create(:message, {
+ 			outbox: @doctor.outbox,
+        	inbox: @patient.inbox
+        })
 	end
 
-	def test_message_gets_created_successfully
-		message_body = "Thanks for a great medical observation"
-		post :create, params: { message: { body: message_body }, associated_message_id: @message.id }
+	def test_that_it_creates_message_with_unread_status
+		create_message_through_post(@doctor_message.id)
+		refute Message.last.read
+	end
 
-		assert_response :redirect
-		assert_redirected_to messages_url
+	def test_that_a_message_is_sent_to_the_correct_inbox_and_outbox_after_creattion
+		create_message_through_post(@doctor_message.id)
 
-		created_message = Message.find_by(body: message_body)
-		assert_not_nil created_message
+		assert_equal Message.last.inbox, @doctor.inbox
+		assert_equal Message.last.outbox, @patient.outbox
+	end
 
-		# A message has an unread status after creation
-		refute created_message.read
+	def test_that_message_goes_to_doctor_when_the_message_is_not_older_than_one_week
+		create_message_through_post(@doctor_message.id)
+		assert Message.last.inbox.user.is_doctor
+	end
 
-		# A message is sent to the correct inbox and outbox after creation
-		assert_equal created_message.inbox, User.default_doctor.inbox
-		assert_equal created_message.outbox, User.current.outbox
+	def test_that_message_goes_to_admin_when_the_message_is_older_than_one_week
+		doctor_message_sent_more_than_a_week_ago =  create(:message, :sent_1_week_ago, {
+ 			outbox: @doctor.outbox,
+        	inbox: @patient.inbox
+        })
+		create_message_through_post(doctor_message_sent_more_than_a_week_ago.id)
+		assert Message.last.inbox.user.is_admin
+	end
 
-		# That the number of unread messages is incremented when a doctor is sent a message
-		doctor_inbox_before_send = Inbox.find_by(user: User.default_doctor.id)
-		message_body = "Wonderful checkup!!!"
-		post :create, params: { message: { body: message_body }, associated_message_id: @message.id }
+	def test_that_the_number_of_unread_messages_is_incremented_when_a_doctor_is_sent_a_message
+		before_create_unread_messages = @doctor.inbox.unread_messages
+		create_message_through_post(@doctor_message.id)
+		assert_operator @doctor.inbox.reload.unread_messages, :>, before_create_unread_messages 
+	end
 
-		assert_equal doctor_inbox_before_send.inbox_count + 1,
-			Inbox.find_by(user: User.default_doctor.id).reload.inbox_count
+	def test_that_unread_messages_is_decremented_when_a_doctor_reads_a_message
+		message =  create(:message, {
+ 			outbox: @patient.outbox,
+        	inbox: @doctor.inbox
+        })
 
-		assert_equal "Your message has been sent!", flash[:success]
+        before_read_unread_messages = @doctor.inbox.reload.unread_messages
 
-		# Message goes to admin when the message is older than 1 week
-		post :create, params: { message: { body: message_body }, associated_message_id: @message_more_than_a_week.id }
-		assert_equal Message.last.inbox, Inbox.default_admin_inbox
+		get :show, params: { id: message.id }
+		assert_operator @doctor.inbox.reload.unread_messages, :<, before_read_unread_messages
+	end
+
+	def test_that_unread_messages_is_incremented_when_a_doctor_receives_a_message
+
 	end
 
 	def test_resend_script
-		assert_nil Payment.find_by(user_id: User.current.id)
+		assert_nil Payment.find_by(user_id: @patient.id)
 
-		post :resend_script, params: { id: @message.id }
+		post :resend_script, params: { id: @doctor_message.id }
 
 		assert_response :redirect
 		assert_redirected_to messages_url
 
 		# A lost script message is sent to the admin
-		assert_equal "I've lost my script, please issue a new one at a charge of €10.",
-			User.default_admin.inbox.messages.last.body
+		assert_equal ResendScriptService::LOST_PRESCRIPTION_MESSAGE,
+			@admin.inbox.messages.last.body
 
-		assert_equal "Script re-issue request has been sent!", flash[:success]
+		assert_not_nil flash[:success]
 
-		# The Payment API is called and Payment Record is created
-		assert_not_nil Payment.find_by(user_id: User.current.id)
+		# Payment Record is created
+		assert_not_nil Payment.find_by(user_id: @patient.id)
 	end
 
-	def test_show
-		message_body = "Thanks for a great medical observation doc!!!"
-		post :create, params: { message: { body: message_body }, associated_message_id: @message.id }
+	def test_application_degrades_gracefully_when_the_payment_api_fails
+		ResendScriptService.any_instance.stubs(:process).returns({success: false})
 
-		inbox_count_before_read = Inbox.find_by(user: User.default_doctor).inbox_count
+		assert_nil flash[:failure]
 
-		get :show, params: { id: Inbox.find_by(user: User.default_doctor).messages.first.id }
+		post :resend_script, params: { id: @doctor_message.id }
 
-		assert_response :success
+		assert_not_nil flash[:failure]
+	end
 
-		# That the number of unread messages is decremented when a doctor reads a message
-		assert_equal inbox_count_before_read - 1, Inbox.find_by(user: User.default_doctor).reload.inbox_count
+	private
+
+	def create_message_through_post(associated_message_id)
+		post :create, params: { message: @message_params, associated_message_id: associated_message_id }
 	end
 end

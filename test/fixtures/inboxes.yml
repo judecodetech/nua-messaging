@@ -1,8 +1,0 @@
-patient_inbox:
-  user: patient
-
-doctor_inbox:
-  user: doctor
-
-admin_inbox:
-  user: admin

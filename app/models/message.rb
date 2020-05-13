@@ -10,11 +10,11 @@ class Message < ApplicationRecord
   end
 
   def increment_inbox_unread_messages_counter!
-    Inbox.increment_counter(:inbox_count, inbox.id)
+    Inbox.increment_counter(:unread_messages, inbox.id)
   end
 
   def decrement_inbox_unread_messages_counter!
-    Inbox.decrement_counter(:inbox_count, inbox.id)
+    Inbox.decrement_counter(:unread_messages, inbox.id)
   end
 
   def mark_as_read!

@@ -14,7 +14,7 @@ ActiveRecord::Schema.define(version: 20200510083231) do
 
   create_table "inboxes", force: :cascade do |t|
     t.integer "user_id"
-    t.integer "inbox_count", default: 0
+    t.integer "unread_messages", default: 0
     t.index ["user_id"], name: "index_inboxes_on_user_id"
   end
 
